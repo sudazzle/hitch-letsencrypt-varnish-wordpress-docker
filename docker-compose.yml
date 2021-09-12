@@ -1,0 +1,67 @@
+version: "3.9"
+services:
+  hitch:
+    image: hitch:latest
+    volumes:
+      - ./hitch/certs/mysite.pem:/etc/hitch/certs/mysite.pem
+      - ./hitch/hitch.conf:/etc/hitch/hitch.conf
+    ports:
+      - 443:443
+    depends_on:
+      - letsencrypt
+      - varnish
+  letsencrypt:
+    build:
+      dockerfile: Dockerfile.certbot
+      context: dockerfiles
+    command: sh -c "certbot certonly --standalone --http-01-port 8080 --server https://acme-v02.api.letsencrypt.org/directory -d mysite.com --text --agree-tos --email mysiteas@gmail.com --rsa-key-size 4096 --verbose --keep-until-expiring --preferred-challenges=http && cat /etc/letsencrypt/live/mysite.no/privkey.pem /etc/letsencrypt/live/mysite.no/fullchain.pem dhparams.pem > /certs/mysite.pem"
+    entrypoint: ""
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./hitch/certs:/certs
+  varnish:
+    build:
+      dockerfile: Dockerfile.varnish
+      context: dockerfiles
+    ports:
+      - 80:8080
+    tmpfs:
+      - /var/lib/varnish:exec
+    depends_on:
+      - wordpress
+    restart: always
+  db:
+    image: mysql:5.7
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: mysite
+      MYSQL_DATABASE: mysite
+      MYSQL_USER: mysite
+      MYSQL_PASSWORD: mysite
+  phpmyadmin:
+    depends_on:
+      - db
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports:
+      - 8081:80
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: mysite
+  wordpress:
+    depends_on:
+      - db
+    image: wordpress:latest
+    volumes:
+      - ./wordpress_data:/var/www/html
+    restart: always
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: mysite
+      WORDPRESS_DB_NAME: mysite
+      WORDPRESS_DB_PASSWORD: mysite
+volumes:
+  db_data:
+
